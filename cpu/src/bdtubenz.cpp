@@ -19,7 +19,7 @@ void tubenz_bdsim (struct enzymes *enz,
     
     double **gr_enz;                                    // Gradient on each enzyme
     double dr_rand;                                     // Gaussian white noise
-   struct timeval t0, tf;          // OpenMP compatible calculation
+    struct timeval t0, tf;                              // OpenMP compatible calculation
     
     gr_enz = dmatrix(enz->N_enz, 3);
 
@@ -188,7 +188,10 @@ void save_file(double **r_enz, int N_enz, int n_files)
     
     fid_enzymes_coords << N_enz << "\n\n";
     for(int i=0; i<N_enz; i++)
-        fid_enzymes_coords << r_enz[i][0] << "\t" << r_enz[i][1] << "\t" << r_enz[i][2] << "\n";
+        fid_enzymes_coords << std::setprecision(9) 
+                           << r_enz[i][0] << "\t"
+                           << r_enz[i][1] << "\t"
+                           << r_enz[i][2] << "\n";
     fid_enzymes_coords.close();
     
     

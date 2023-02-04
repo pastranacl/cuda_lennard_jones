@@ -6,12 +6,11 @@
 #include <sstream> 
 #include <algorithm>
 #include <unistd.h>
+#include <iomanip>          // std::setprecision
+#include <ctime>            // Current day
+#include <sys/time.h>       // Exect time
 
 #include <cuda_runtime.h>
-#include <ctime>        // Current day
-#include <sys/time.h>     // Exect time
-
-
 
 
 #ifndef PI
@@ -47,11 +46,11 @@ struct enzymes
     int N_enz;              // Number of enzymes (to be determined from concentration)
     double ENZ_CONC;        // Enzyme concentration on the vesicle 
     
-    double D0;          // Base diffusion constant for the enzyme
+    double D0;              // Base diffusion constant for the enzyme
     
-    double SIGMA;       // Diameter of the enzyme
+    double SIGMA;           // Diameter of the enzyme
     double EPS_EE;          // Depth of the repulsion potential in the enzyme-enzyme interaction
-    double EPS_EWALL;        // Depth of the repulsion potential in the enzyme-membrane interaction
+    double EPS_EWALL;       // Depth of the repulsion potential in the enzyme-membrane interaction
     
     
     double SSQ_RC;
@@ -71,7 +70,6 @@ struct tube
 struct environment
 {
     double kBT;             // Temperature of the bath [pN nm]
-    double S0_MAX;          // Max concentration of the substrate [nM]
 };
 
 

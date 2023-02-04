@@ -115,7 +115,8 @@ void save_file(double **r_enz, int N_enz, int n_files)
     
     fid_enzymes_coords << N_enz << "\n\n";
     for(int i=0; i<N_enz; i++)
-        fid_enzymes_coords << r_enz[i][0] << "\t" 
+        fid_enzymes_coords << std::setprecision(9)
+                           << r_enz[i][0] << "\t" 
                            << r_enz[i][1] << "\t"
                            << r_enz[i][2] << "\n";
                            
@@ -142,7 +143,7 @@ __global__  void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
     if (i >= enz->N_enz) return;
     
     
-    for(int j=+1; j<enz->N_enz; j++) {
+    for(int j=i+1; j<enz->N_enz; j++) {
         
         double xej, yej, zej;
         double xei, yei, zei;
