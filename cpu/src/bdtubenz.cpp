@@ -102,7 +102,7 @@ void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
     double r2i, r6i, r12i;
     double fLJ;
     zeros_dmatrix(gr_enz, enz->N_enz, 3);
-
+ 
     // GRADIENTS between enzymes
     #pragma omp parallel for private(dx,dy,dz,dsq,r2i,r6i,r12i,fLJ)
     for(int i=0; i<enz->N_enz; i++) {

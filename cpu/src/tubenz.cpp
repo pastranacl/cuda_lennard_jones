@@ -216,17 +216,8 @@ int main()
         fid_enzymes_coords << enz.r_enz[i][0] << "\t" << enz.r_enz[i][1] << "\t" << enz.r_enz[i][2] << "\n";
     fid_enzymes_coords.close();
     
-    
-    std::string FULL_PATH_ENZYMES;
-    FULL_PATH_ENZYMES = strcat(ENZYMES_PATH, int2str(0));
-    FULL_PATH_ENZYMES = strcat(FULL_PATH_ENZYMES, ENZYMES_FNAME);
-    fid_enzymes_coords.open (FULL_PATH_ENZYMES, ofstream::out);
-    fid_enzymes_coords << enz.N_enz << "\n\n";
-    for(int i=0; i<enz.N_enz; i++)
-        fid_enzymes_coords << enz.r_enz[i][0] << "\t" << enz.r_enz[i][1] << "\t" << enz.r_enz[i][2] << "\n";
-    fid_enzymes_coords.close();
-    
-    
+    // First simulation step
+    save_file(enz.r_enz, enz.N_enz, 0);
     
     // -------------------------------------------------------------------------------
     

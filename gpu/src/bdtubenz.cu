@@ -8,8 +8,6 @@
 
 
 
-
-
 void tubenz_bdsim (struct enzymes *enz, 
                    struct tube *tb, 
                    struct environment *env,
@@ -17,22 +15,24 @@ void tubenz_bdsim (struct enzymes *enz,
                    double SIM_TIME,
                    int SAVING_FREQ)
 {
-    
-    long *idum, foornd = -time(NULL);                   // Variables for randm number generator    
-    
-    double **gr_enz;                                    // Gradient on each enzyme
+    double *gr_enz;                                    // Gradient on each enzyme
     double dr_rand;                                     // Gaussian white noise
+    long *idum, foornd = -time(NULL);                   // Variables for randm number generator    
     struct timeval t0, tf;                              // OpenMP compatible calculation
-    
-    gr_enz = dmatrix(enz->N_enz, 3);
+    const int NUM_BLOCKS = (enz->N_enz + BLOCK_SIZE - 1) // Number of blocks for cuda
+                           / BLOCK_SIZE;
 
+    //gr_enz = dmatrix(enz->N_enz, 3);    
+    gr_enz = dvector(enz->N_enz*3);    
     
+    //size_t size = 3*(enz->N_enz)*sizeof(double);
+    //cudaError_t error = cudaMallocManaged(&gr_enz, size);
+
     idum = &foornd;
     
     /*********************************************************************************/
     /*                               PREPROCESSING STEPS                             */
     /*********************************************************************************/
-   
    
     // Parameters for Lennard-Jones calculations
     double SIGMA_SQ; 
@@ -51,32 +51,50 @@ void tubenz_bdsim (struct enzymes *enz,
     double t=0;                                          // Simulation time
     int n_sims=1;                                         // Number of simulation steps
     int n_files=1;                                         // Files saved
+
+    enzymes *d_enz;
+    tube  *d_tb;
+    double *d_gr_enz;
+    double *d_r_enz;
+    double *h_r_enz = enz->r_enz; // Use of intermedium variable
+
+    cudaMalloc(&d_enz, sizeof(enzymes));
+    cudaMalloc(&d_tb, sizeof(tube));
+    cudaMalloc(&d_gr_enz, 3*enz->N_enz*sizeof(double));
+    cudaMalloc(&d_r_enz, 3*enz->N_enz*sizeof(double));
+
+    // We only use the structures to get the parameters
+    cudaMemcpy(d_enz, enz, sizeof(enzymes), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_tb, tb, sizeof(tube), cudaMemcpyHostToDevice);
     
     gettimeofday(&t0, NULL);
-    int block_size = 256; // This is the number of threads per block
-    int num_blocks = (enz->N_enz + block_size - 1) / block_size;
     while(t<SIM_TIME) 
     {
         
         // Gradients
-        zeros_dmatrix(gr_enz, enz->N_enz, 3);
+
+        // copy the host structure to the device
+        // See  https://stackoverflow.com/questions/30584392/how-to-pass-struct-containing-array-to-the-kernel-in-cuda
+        //cudaMemcpy(d_gr_enz, gr_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
+        //cout  << enz->r_enz[1] << endl;
+
+        cudaMemcpy(d_r_enz, h_r_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
+        grad<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, d_enz, d_tb, d_gr_enz);
+        cudaDeviceSynchronize();
+        cudaMemcpy(gr_enz, d_gr_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyDeviceToHost);
         
-        
-        grad<<<num_blocks, block_size>>>(enz, tb, gr_enz);
-      
+
+
         // Movement
-        for(int i=0; i<(enz->N_enz); i++) {    
-            
-            // D influences drag and random force
+        for(int i=0; i<(enz->N_enz); i++) {  
             dr_rand = sqrt(2*enz->D0*dt);
             dr_rand = 0; // TODO: NO NOISE!
-            enz->r_enz[i][0] -= enz->D0*gr_enz[i][0]*dt/(env->kBT) + dr_rand*gasdev(idum); 
-            enz->r_enz[i][1] -= enz->D0*gr_enz[i][1]*dt/(env->kBT) + dr_rand*gasdev(idum);
-            enz->r_enz[i][2] -= enz->D0*gr_enz[i][2]*dt/(env->kBT) + dr_rand*gasdev(idum); 
+            enz->r_enz[i*3+0] -= enz->D0*gr_enz[i*3 + 0]*dt/(env->kBT) + dr_rand*gasdev(idum); 
+            enz->r_enz[i*3+1] -= enz->D0*gr_enz[i*3 + 1]*dt/(env->kBT) + dr_rand*gasdev(idum);
+            enz->r_enz[i*3+2] -= enz->D0*gr_enz[i*3 + 2]*dt/(env->kBT) + dr_rand*gasdev(idum); 
             
-            enz->r_enz[i][0] = pbc(enz->r_enz[i][0], tb->wh);
-            enz->r_enz[i][2] = pbc(enz->r_enz[i][2], tb->wh);
-            
+            enz->r_enz[i+0] = pbc(enz->r_enz[i+0], tb->wh);
+            enz->r_enz[i+2] = pbc(enz->r_enz[i+2], tb->wh);
         }
         
         
@@ -88,6 +106,7 @@ void tubenz_bdsim (struct enzymes *enz,
         
         t += dt;
         n_sims++;   
+        break;
     }
     
     
@@ -97,13 +116,13 @@ void tubenz_bdsim (struct enzymes *enz,
     
     
     // Free memory
-    free_dmatrix(gr_enz, enz->N_enz);
-    
+    //free_dmatrix(gr_enz, enz->N_enz);
+    // Free the managed memory
+    cudaFree(gr_enz);
 }
 
 
-
-void save_file(double **r_enz, int N_enz, int n_files)
+void save_file(double *r_enz, int N_enz, int n_files)
 {
     std::string FULL_PATH_ENZYMES;                 
     
@@ -116,9 +135,9 @@ void save_file(double **r_enz, int N_enz, int n_files)
     fid_enzymes_coords << N_enz << "\n\n";
     for(int i=0; i<N_enz; i++)
         fid_enzymes_coords << std::setprecision(9)
-                           << r_enz[i][0] << "\t" 
-                           << r_enz[i][1] << "\t"
-                           << r_enz[i][2] << "\n";
+                           << r_enz[i*3+0] << "\t" 
+                           << r_enz[i*3+1] << "\t"
+                           << r_enz[i*3+2] << "\n";
                            
     fid_enzymes_coords.close();
     
@@ -130,30 +149,41 @@ void save_file(double **r_enz, int N_enz, int n_files)
 /*************************************************************************************/
 
 
-__global__  void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
+__global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
 {
+
+    
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= enz->N_enz) return;
     
     double dx, dy, dz, dsq; 
     double r2i, r6i, r12i;
     double fLJ;
-    
 
+
+    gr_enz[i*3+0] = 2; 
+    gr_enz[i*3+1] = 2; 
+    gr_enz[i*3+2] = 2; 
+    printf("%f\t%f\t%f\n", r_enz[i*3+0],
+                                        r_enz[i*3+1],
+                                        r_enz[i*3+2]);
+    
     // GRADIENTS between enzymes
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= enz->N_enz) return;
-    
-    
-    for(int j=i+1; j<enz->N_enz; j++) {
-        
+    for(int j=0; j < enz->N_enz; j++) 
+    {
+        if(i==j) continue;
+       
         double xej, yej, zej;
         double xei, yei, zei;
-        xei = enz->r_enz[i][0];
-        yei = enz->r_enz[i][1];
-        zei = enz->r_enz[i][2];
-        xej = enz->r_enz[j][0];
-        yej = enz->r_enz[j][1];
-        zej = enz->r_enz[j][2];
+        xei = r_enz[i*3+0];
+        yei = r_enz[i*3+1];
+        zei = r_enz[i*3+2];
+        xej = r_enz[j*3+0];
+        yej = r_enz[j*3+1];
+        zej = r_enz[j*3+2];
         
+        //printf("%f\n", xei);
+
         dx = cupbc(xei-xej, tb->wh);
         dz = cupbc(zei-zej, tb->wh);
         dy = yei-yej;
@@ -165,22 +195,15 @@ __global__  void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
             r6i = r2i*r2i*r2i;
             r12i = r6i*r6i;
             fLJ = 24.0*(enz->EPS_EE)*(enz->S6*r6i - 2.0*enz->S12*r12i)*r2i;  
-            
-            gr_enz[i][0] += fLJ*dx;
-            gr_enz[i][1] += fLJ*dy; 
-            gr_enz[i][2] += fLJ*dz;
-            
-            gr_enz[j][0] -= fLJ*dx;
-            gr_enz[j][1] -= fLJ*dy; 
-            gr_enz[j][2] -= fLJ*dz;
-                
-        //}
+    
+            gr_enz[3*i] += fLJ*dx;
+            gr_enz[3*i+1] += fLJ*dy; 
+            gr_enz[3*i+2] += fLJ*dz;
+        //    
     }
 
-
-    
     // GRADIENT RIGHT wall repulsion
-    dy = enz->r_enz[i][1] - 0.5*tb->L;
+    dy = r_enz[i*3+1] - 0.5*tb->L;
     dsq = dy*dy;
     if(dsq < enz->SSQ_RC) {
         r2i = 1.0/dsq;
@@ -188,11 +211,11 @@ __global__  void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
         r12i = r6i*r6i;
         
         fLJ = 24.0*(enz->EPS_EWALL)*(enz->S6*r6i - 2.0*enz->S12*r12i)*r2i;               
-        gr_enz[i][1] += fLJ*dy; 
+        gr_enz[3*i+1] += fLJ*dy; 
     }
 
     // GRADIENT LEFT wall repuslion
-    dy = enz->r_enz[i][1] + 0.5*tb->L;
+    dy = r_enz[i*3+1] + 0.5*tb->L;
     dsq = dy*dy;
     if(dsq < enz->SSQ_RC) {
         r2i = 1.0/dsq;
@@ -200,7 +223,7 @@ __global__  void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
         r12i = r6i*r6i;
         
         fLJ = 24.0*(enz->EPS_EWALL)*(enz->S6*r6i - 2.0*enz->S12*r12i)*r2i;               
-        gr_enz[i][1] += fLJ*dy; 
+        gr_enz[3*i+1] += fLJ*dy; 
     }
     
 }

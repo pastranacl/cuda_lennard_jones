@@ -3,7 +3,7 @@
 
 CXX := nvcc
 
-
+CUFLAGS := -O2
 BIN_PATH := ./bin
 SRC_PATH := ./src
 
@@ -15,7 +15,7 @@ main:
 	@echo "${SRCS}"
 	@clear
 	@echo -n "Compiling GPU code... "
-	@${CXX} ${SRCS} -o ${BIN_PATH}/${ON}
+	@${CXX} ${SRCS} ${CUFLAGS} -o ${BIN_PATH}/${ON}
 	@echo -n "Done!\n"
 	
 

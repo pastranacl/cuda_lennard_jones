@@ -12,6 +12,10 @@
 
 #include <cuda_runtime.h>
 
+#ifndef BLOCK_SIZE
+#define BLOCK_SIZE 256
+#endif
+
 
 #ifndef PI
 #define PI 3.141592653589793238462643383279502884197169
@@ -23,6 +27,8 @@
 
 #define ENZYMES_PATH                "./enzymes/"
 #define ENZYMES_FNAME               "_enzymes.xyz"
+
+
 
 
 
@@ -42,7 +48,7 @@ using std::nothrow; // Do not send exception but a null pointer in new
 
 struct enzymes
 {
-    double **r_enz;         // Coordinates of the enzymes
+    double *r_enz;         // Coordinates of the enzymes
     int N_enz;              // Number of enzymes (to be determined from concentration)
     double ENZ_CONC;        // Enzyme concentration on the vesicle 
     
@@ -83,14 +89,14 @@ void tubenz_bdsim(struct enzymes *enz,
                    int SAVING_FREQ);
 
 // Save
-void save_file(double **r_enz, int N_enz, int n_files);
+void save_file(double *r_enz, int N_enz, int n_files);
 
 
 
 
 
 // Gradient
-__global__ void grad(struct enzymes *enz, struct tube *tb, double **gr_enz);
+__global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz);
 
 
 // Periodic bounday conditions

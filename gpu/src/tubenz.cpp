@@ -179,7 +179,7 @@ int main()
     if(errloadenz==1) {
         
         enz.N_enz = enz.ENZ_CONC*tb.V*AVOGADRO_PREFACTOR*1.0e-10; 
-        enz.r_enz = dmatrix(enz.N_enz, 3);
+        enz.r_enz = dvector(enz.N_enz*3);
         enzyme_positions(&enz, &tb);
         
         
@@ -197,11 +197,11 @@ int main()
     } else {
         
         // Copy the enzymes from a dvector to "new" matrix
-        enz.r_enz = dmatrix(enz.N_enz, 3);
+        enz.r_enz = dvector(enz.N_enz*3);
         for(int i = 0; i<enz.N_enz; i++) {
-            enz.r_enz [i][0] = r_enz[i][0];
-            enz.r_enz [i][1] = r_enz[i][1];
-            enz.r_enz [i][2] = r_enz[i][2];
+            enz.r_enz[i*3+0] = r_enz[i][0];
+            enz.r_enz[i*3+1] = r_enz[i][1];
+            enz.r_enz[i*3+2] = r_enz[i][2];
         }
         r_enz.clear();
     }
@@ -213,19 +213,14 @@ int main()
     fid_enzymes_coords.open (INIT_COORDS_SAVE, ofstream::out);
     fid_enzymes_coords << enz.N_enz << "\n\n";
     for(int i=0; i<enz.N_enz; i++)
-        fid_enzymes_coords << enz.r_enz[i][0] << "\t" << enz.r_enz[i][1] << "\t" << enz.r_enz[i][2] << "\n";
+        fid_enzymes_coords << enz.r_enz[i*3+0] << "\t"
+                           << enz.r_enz[i*3+1] << "\t" 
+                           << enz.r_enz[i*3+2] << "\n";
     fid_enzymes_coords.close();
     
-    
-    std::string FULL_PATH_ENZYMES;
-    FULL_PATH_ENZYMES = strcat(ENZYMES_PATH, int2str(0));
-    FULL_PATH_ENZYMES = strcat(FULL_PATH_ENZYMES, ENZYMES_FNAME);
-    fid_enzymes_coords.open (FULL_PATH_ENZYMES, ofstream::out);
-    fid_enzymes_coords << enz.N_enz << "\n\n";
-    for(int i=0; i<enz.N_enz; i++)
-        fid_enzymes_coords << enz.r_enz[i][0] << "\t" << enz.r_enz[i][1] << "\t" << enz.r_enz[i][2] << "\n";
-    fid_enzymes_coords.close();
-    
+    // First simulation step
+    save_file(enz.r_enz, enz.N_enz, 0);
+
     
     
     // -------------------------------------------------------------------------------
@@ -290,23 +285,23 @@ void enzyme_positions(struct enzymes *enz, struct tube *tb)
     
    
     // First particle random
-    enz->r_enz[0][0] = (maxx-minx)*ran1(idum) + minx;
-    enz->r_enz[0][1] = (maxL-minL)*ran1(idum) + minL;
-    enz->r_enz[0][2] = (maxx-minx)*ran1(idum) + minx;
+    enz->r_enz[0] = (maxx-minx)*ran1(idum) + minx;
+    enz->r_enz[1] = (maxL-minL)*ran1(idum) + minL;
+    enz->r_enz[2] = (maxx-minx)*ran1(idum) + minx;
     
     for(int i=1; i<enz->N_enz; i++) {
         
-        enz->r_enz[i][0] = (maxx-minx)*ran1(idum) + minx;
-        enz->r_enz[i][1] = (maxL-minL)*ran1(idum) + minL;
-        enz->r_enz[i][2] = (maxx-minx)*ran1(idum) + minx;
+        enz->r_enz[i*3+0] = (maxx-minx)*ran1(idum) + minx;
+        enz->r_enz[i*3+1] = (maxL-minL)*ran1(idum) + minL;
+        enz->r_enz[i*3+2] = (maxx-minx)*ran1(idum) + minx;
         
         d_min=det_dmin(enz, i);
         
         while(d_min<sq_sigma) {
       
-            enz->r_enz[i][0] = (maxx-minx)*ran1(idum) + minx;
-            enz->r_enz[i][1] = (maxL-minL)*ran1(idum) + minL;
-            enz->r_enz[i][2] = (maxx-minx)*ran1(idum) + minx;
+            enz->r_enz[i*3+0] = (maxx-minx)*ran1(idum) + minx;
+            enz->r_enz[i*3+1] = (maxL-minL)*ran1(idum) + minL;
+            enz->r_enz[i*3+2] = (maxx-minx)*ran1(idum) + minx;
     
             // Check that two enzymes are not too near
             d_min=det_dmin(enz, i);
@@ -323,16 +318,16 @@ double det_dmin(struct enzymes *enz, int id)
     double d_min;
     double dx,dy,dz,d;
     
-    dx = enz->r_enz[id][0] - enz->r_enz[0][0];
-    dy = enz->r_enz[id][1] - enz->r_enz[0][1];
-    dz = enz->r_enz[id][2] - enz->r_enz[0][2];
+    dx = enz->r_enz[id*3+0] - enz->r_enz[0];
+    dy = enz->r_enz[id*3+1] - enz->r_enz[1];
+    dz = enz->r_enz[id*3+2] - enz->r_enz[2];
     d_min = dx*dx + dy*dy + dz*dz;
     
     
     for(int j=0; j<id; j++){
-        dx = enz->r_enz[id][0] - enz->r_enz[j][0];
-        dy = enz->r_enz[id][1] - enz->r_enz[j][1];
-        dz = enz->r_enz[id][2] - enz->r_enz[j][2];
+        dx = enz->r_enz[id*3+0] - enz->r_enz[j*3+0];
+        dy = enz->r_enz[id*3+1] - enz->r_enz[j*3+1];
+        dz = enz->r_enz[id*3+2] - enz->r_enz[j*3+2];
         d = dx*dx + dy*dy + dz*dz;
         if(d<d_min)
             d_min = d;
