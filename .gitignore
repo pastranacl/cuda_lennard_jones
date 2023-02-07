@@ -1,4 +1,7 @@
 */bin/enzymes/*
+*/*/bin/enzymes/*
+
 
 */bin/tubenz
-*/bin/gputubenz
+*/*/bin/gputubenz
+*/tests
