@@ -13,7 +13,7 @@
 #include <cuda_runtime.h>
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 128
 #endif
 
 

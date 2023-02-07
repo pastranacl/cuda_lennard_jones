@@ -99,22 +99,24 @@ void tubenz_bdsim (struct enzymes *enz,
 
 void grad(struct enzymes *enz, struct tube *tb, double *gr_enz)
 {
-
-    #pragma acc data copy(enz, tb) copyout(gr_enz[0:enz->N_enz])
+    int NS = 3*enz->N_enz;
+    #pragma acc data copy(gr_enz[0:NS]) copyin(enz, tb)
     {
         // Initialize to zero
-        for(int i=0; i< (3*enz->N_enz); i++)
-            gr_enz[i] =0;
+        for(int i=0; i<NS; i++) 
+		gr_enz[i]=0;
 
         // Forces
         double dx, dy, dz, dsq; 
         double r2i, r6i, r12i;
         double fLJ;
         
-        // Forces due to enzyme-enzyme
-        #pragma acc parallel loop reduction(+ | gr_enz[0:enz->N_enz])
-        for(int i=0; i<enz->N_enz; i++) {
-            for(int j=0; j<enz->N_enz; j++) {
+        // Forces due tn enzyme-enzyme
+        #pragma acc kernel loop reduction(+:gr_enz[0:NS])
+        for(int i=0; i<enz->N_enz; i++) 
+        {
+            for(int j=0; j<enz->N_enz; j++) 
+            {
                 if(i==j) continue;
             
                 double xej, yej, zej;
@@ -143,12 +145,8 @@ void grad(struct enzymes *enz, struct tube *tb, double *gr_enz)
                     
                 //}
             }
-        }
-        
 
-        // GRADIENT WALLS 
-        #pragma acc parallel loop reduction(+ | gr_enz[0:enz->N_enz])
-        for(int i=0; i<enz->N_enz; i++) {    
+
             // GRADIENT RIGHT wall repulsion
             dy = enz->r_enz[i][1] - 0.5*tb->L;
             dsq = dy*dy;
@@ -173,6 +171,7 @@ void grad(struct enzymes *enz, struct tube *tb, double *gr_enz)
                 gr_enz[i*3+1] += fLJ*dy; 
             }
         }
+        
     }
 
     

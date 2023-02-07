@@ -123,7 +123,7 @@ void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
             dy = yei-yej;
             dz = pbc(zei-zej, tb->wh);
             dsq = dx*dx + dy*dy + dz*dz;
-            //if(dsq < enz->SSQ_RC) {
+            if(dsq < enz->SSQ_RC) {
                 
                 r2i = 1.0/dsq;
                 r6i = r2i*r2i*r2i;
@@ -137,7 +137,7 @@ void grad(struct enzymes *enz, struct tube *tb, double **gr_enz)
                 #pragma omp critical
                 gr_enz[i][2] += fLJ*dz;
                 
-            //}
+            }
         }
     }
 

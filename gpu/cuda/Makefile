@@ -3,7 +3,7 @@
 
 CXX := nvcc
 
-CUFLAGS := -O2
+CUFLAGS := -O3
 BIN_PATH := ./bin
 SRC_PATH := ./src
 

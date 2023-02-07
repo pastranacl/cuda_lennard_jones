@@ -106,7 +106,7 @@ void tubenz_bdsim (struct enzymes *enz,
         
         t += dt;
         n_sims++;   
-        break;
+	//break;
     }
     
     
@@ -161,13 +161,14 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
     double fLJ;
 
 
-    gr_enz[i*3+0] = 2; 
-    gr_enz[i*3+1] = 2; 
-    gr_enz[i*3+2] = 2; 
+    gr_enz[i*3+0] = 0; 
+    gr_enz[i*3+1] = 0; 
+    gr_enz[i*3+2] = 0; 
+    /*
     printf("%f\t%f\t%f\n", r_enz[i*3+0],
                                         r_enz[i*3+1],
                                         r_enz[i*3+2]);
-    
+    */
     // GRADIENTS between enzymes
     for(int j=0; j < enz->N_enz; j++) 
     {
@@ -189,7 +190,7 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
         dy = yei-yej;
         dsq = dx*dx + dy*dy + dz*dz;
 
-        //if(dsq < enz->SSQ_RC) {
+        if(dsq < enz->SSQ_RC) {
             
             r2i = 1.0/dsq;
             r6i = r2i*r2i*r2i;
@@ -198,8 +199,8 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
     
             gr_enz[3*i] += fLJ*dx;
             gr_enz[3*i+1] += fLJ*dy; 
-            gr_enz[3*i+2] += fLJ*dz;
-        //    
+            gr_enz[3*i+2] += fLJ*dz;    
+	}
     }
 
     // GRADIENT RIGHT wall repulsion
@@ -225,7 +226,7 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
         fLJ = 24.0*(enz->EPS_EWALL)*(enz->S6*r6i - 2.0*enz->S12*r12i)*r2i;               
         gr_enz[3*i+1] += fLJ*dy; 
     }
-    
+    //__syncthreads();
 }
 
 

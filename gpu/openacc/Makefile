@@ -4,7 +4,8 @@ CXX := g++
 FLAGS := -std=c++11 -O3 -lm 
 FLAGS_DEBUG := -g -Wall
 OPENMP_FLAGS := -fopenmp
-OPEN_ACC_FLAGS := -fopenacc-dim=1024:1:256 -fcf-protection=none -foffload=-misa=sm_35
+OPEN_ACC_FLAGS := -fopenacc -fcf-protection=none -foffload=-misa=sm_35
+#-fopenacc-dim=1024:1:256
 
 BIN_PATH := ./bin/
 SRC_PATH := ./src/
