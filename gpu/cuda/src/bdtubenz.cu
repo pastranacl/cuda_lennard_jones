@@ -4,10 +4,6 @@
 #include "rands.hpp"
 
 
-
-
-
-
 void tubenz_bdsim (struct enzymes *enz, 
                    struct tube *tb, 
                    struct environment *env,
@@ -72,31 +68,47 @@ void tubenz_bdsim (struct enzymes *enz,
     {
         
         // Gradients
-        // copy the host structure to the device
-        // See  https://stackoverflow.com/questions/30584392/how-to-pass-struct-containing-array-to-the-kernel-in-cuda
-
+        /* Important remark: Copy a host structure to the device including the 
+            arrays contained on the structure is not trivial. I have not been able
+            to read the data of the array, though the structure is copied given that
+            I have acess to non-array variables. Thus, to overcome that limitation
+            I look for alternatives by taking out the arrays
+         See  https://stackoverflow.com/questions/30584392/how-to-pass-struct-containing-array-to-the-kernel-in-cuda
+        */
         cudaMemcpy(d_r_enz, h_r_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
+        
+        // Method 1
         //grad<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, d_enz, d_tb, d_gr_enz);
-        /*
+
+        /*  Method 2
         grad_direct<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, enz->N_enz,  
-                                                enz->SSQ_RC, enz->EPS_EE, enz->EPS_EWALL, enz->S6, enz->S12, 
+                                                enz->SSQ_RC, 
+                                                enz->EPS_EE, 
+                                                enz->EPS_EWALL,
+                                                 enz->S6, 
+                                                 enz->S12, 
                                                 tb->L, tb->wh,
                                                 d_gr_enz);
         */
-        dim3 dimBlock(32, 32);
-        dim3 dimGrid(1, 1);
+
+        // Method 3. 2D array exploration HIGLY LIMITED
+        dim3 dimBlock(32, 32);// A block of 32 x 32 threads (max in 1024 threads for a block)
+        dim3 dimGrid(1, 1);  // Single grid
         grad_direct_2d<<<dimGrid, dimBlock>>>(d_r_enz, enz->N_enz,  
-                                                enz->SSQ_RC, enz->EPS_EE, enz->EPS_EWALL, enz->S6, enz->S12, 
+                                                enz->SSQ_RC, 
+                                                enz->EPS_EE, 
+                                                enz->EPS_EWALL, 
+                                                enz->S6, enz->S12, 
                                                 tb->L, tb->wh,
                                                 d_gr_enz);
         
-       
+        // Syncrhonize and copy back
         cudaDeviceSynchronize();
         cudaMemcpy(gr_enz, d_gr_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyDeviceToHost);
         
 
 
-        // Movement
+        // Movement of enzymes
         for(int i=0; i<(enz->N_enz); i++) {  
             dr_rand = sqrt(2*enz->D0*dt);
             dr_rand = 0; // TODO: NO NOISE!
@@ -117,7 +129,7 @@ void tubenz_bdsim (struct enzymes *enz,
         
         t += dt;
         n_sims++;   
-	//break;
+	    //break;
     }
     
     
@@ -129,7 +141,9 @@ void tubenz_bdsim (struct enzymes *enz,
     // Free memory
     //free_dmatrix(gr_enz, enz->N_enz);
     // Free the managed memory
+    // It'd great if you free everything you have allocated, isn't it?
     cudaFree(gr_enz);
+
 }
 
 
@@ -160,6 +174,12 @@ void save_file(double *r_enz, int N_enz, int n_files)
 /*************************************************************************************/
 
 
+
+/**************************************************************************/
+/*  We pass the array independently and all the structures. Note that the 
+    if the structures contain arrays you have to send them to the GPU 
+    memory, with the ensuing time consumption.
+/**************************************************************************/
 __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
 {
 
@@ -234,7 +254,12 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
 }
 
 
-
+/**************************************************************************/
+/*  Improved version of grad. Since we require to send r_enz, we avoid 
+   sending the structure, which has r_enz (but I am not able to access 
+   to it), and we send the main ingredients that are necessary for the 
+   function.
+/**************************************************************************/
 __global__ void grad_direct(double *r_enz,
                            int N_enz,
                            double enz_SSQ_RC,
@@ -319,7 +344,14 @@ __global__ void grad_direct(double *r_enz,
 }
 
 
-
+/*****************************************************************/
+/* First trial to explore the array of i-j interactions considering 
+   a 2d array. This a limited approximation to 32 particles. The
+   reason is that we can atomicAdd only works for data in a single
+   block, and is blind to what happens in other blocks. Thus, we 
+   need to limit ourself to a single block, which has maximum of 
+   1024 threds, 32x32 possible interactions.
+/*****************************************************************/
 __global__ void grad_direct_2d(double *r_enz,
                                 int N_enz,
                                 double enz_SSQ_RC,
@@ -337,9 +369,8 @@ __global__ void grad_direct_2d(double *r_enz,
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     
     if (i >= N_enz || j >= N_enz || i==j) return;
-    printf("%d", j);
-    
-    
+    //printf("%d", j);
+
     gr_enz[i*3+0] = 0; 
     gr_enz[i*3+1] = 0; 
     gr_enz[i*3+2] = 0; 
@@ -353,7 +384,6 @@ __global__ void grad_direct_2d(double *r_enz,
     double r2i, r6i, r12i;
     double fLJ;
 
-    
     
     // GRADIENTS between enzymes
    
