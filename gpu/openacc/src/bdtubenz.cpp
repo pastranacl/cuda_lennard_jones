@@ -104,7 +104,7 @@ void grad(struct enzymes *enz, struct tube *tb, double *gr_enz)
     {
         // Initialize to zero
         for(int i=0; i<NS; i++) 
-		gr_enz[i]=0;
+		    gr_enz[i]=0;
 
         // Forces
         double dx, dy, dz, dsq; 

@@ -15,7 +15,7 @@ main:
 	@echo "${SRCS}"
 	@clear
 	@echo -n "Compiling GPU code... "
-	@${CXX} ${SRCS} ${CUFLAGS} -o ${BIN_PATH}/${ON}
+	@${CXX} ${SRCS} ${CUFLAGS} -arch=sm_61 -o ${BIN_PATH}/${ON}
 	@echo -n "Done!\n"
 	
 

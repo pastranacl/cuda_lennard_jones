@@ -13,7 +13,7 @@
 #include <cuda_runtime.h>
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 32
 #endif
 
 
@@ -98,6 +98,16 @@ void save_file(double *r_enz, int N_enz, int n_files);
 // Gradient
 __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz);
 
+__global__ void grad_direct(double *r_enz,
+                           int N_enz,
+                           double enz_SSQ_RC,
+                           double enz_EPS_EE,
+                           double enz_EPS_EWALL,
+                           double enz_S6,
+                           double enz_S12, 
+                           double tb_L,
+                           double tb_wh,
+                           double *gr_enz);
 
 // Periodic bounday conditions
 __device__ inline double cupbc(double x, double w)

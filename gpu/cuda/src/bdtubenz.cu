@@ -72,14 +72,18 @@ void tubenz_bdsim (struct enzymes *enz,
     {
         
         // Gradients
-
         // copy the host structure to the device
         // See  https://stackoverflow.com/questions/30584392/how-to-pass-struct-containing-array-to-the-kernel-in-cuda
-        //cudaMemcpy(d_gr_enz, gr_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
-        //cout  << enz->r_enz[1] << endl;
 
         cudaMemcpy(d_r_enz, h_r_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
-        grad<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, d_enz, d_tb, d_gr_enz);
+        //grad<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, d_enz, d_tb, d_gr_enz);
+        
+        grad_direct<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, enz->N_enz,  
+                                                enz->SSQ_RC, enz->EPS_EE, enz->EPS_EWALL, enz->S6, enz->S12, 
+                                                tb->L, tb->wh,
+                                                d_gr_enz);
+        
+       
         cudaDeviceSynchronize();
         cudaMemcpy(gr_enz, d_gr_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyDeviceToHost);
         
@@ -160,15 +164,10 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
     double r2i, r6i, r12i;
     double fLJ;
 
-
     gr_enz[i*3+0] = 0; 
     gr_enz[i*3+1] = 0; 
     gr_enz[i*3+2] = 0; 
-    /*
-    printf("%f\t%f\t%f\n", r_enz[i*3+0],
-                                        r_enz[i*3+1],
-                                        r_enz[i*3+2]);
-    */
+   
     // GRADIENTS between enzymes
     for(int j=0; j < enz->N_enz; j++) 
     {
@@ -183,8 +182,6 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
         yej = r_enz[j*3+1];
         zej = r_enz[j*3+2];
         
-        //printf("%f\n", xei);
-
         dx = cupbc(xei-xej, tb->wh);
         dz = cupbc(zei-zej, tb->wh);
         dy = yei-yej;
@@ -200,7 +197,7 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
             gr_enz[3*i] += fLJ*dx;
             gr_enz[3*i+1] += fLJ*dy; 
             gr_enz[3*i+2] += fLJ*dz;    
-	}
+	    }
     }
 
     // GRADIENT RIGHT wall repulsion
@@ -230,4 +227,87 @@ __global__ void grad(double *r_enz, enzymes *enz, tube *tb, double *gr_enz)
 }
 
 
+
+__global__ void grad_direct(double *r_enz,
+                           int N_enz,
+                           double enz_SSQ_RC,
+                           double enz_EPS_EE,
+                           double enz_EPS_EWALL,
+                           double enz_S6,
+                           double enz_S12, 
+                           double tb_L,
+                           double tb_wh,
+                           double *gr_enz)
+{
+    
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N_enz) return;
+    
+    double dx, dy, dz, dsq; 
+    double r2i, r6i, r12i;
+    double fLJ;
+
+    gr_enz[i*3+0] = 0; 
+    gr_enz[i*3+1] = 0; 
+    gr_enz[i*3+2] = 0; 
+    
+    // GRADIENTS between enzymes
+    for(int j=0; j < N_enz; j++) 
+    {
+        if(i==j) continue;
+       
+        double xej, yej, zej;
+        double xei, yei, zei;
+        xei = r_enz[i*3+0];
+        yei = r_enz[i*3+1];
+        zei = r_enz[i*3+2];
+        xej = r_enz[j*3+0];
+        yej = r_enz[j*3+1];
+        zej = r_enz[j*3+2];
+        
+        dx = cupbc(xei-xej, tb_wh);
+        dz = cupbc(zei-zej, tb_wh);
+        dy = yei-yej;
+        dsq = dx*dx + dy*dy + dz*dz;
+
+        if(dsq < enz_SSQ_RC) {
+            
+            r2i = 1.0/dsq;
+            r6i = r2i*r2i*r2i;
+            r12i = r6i*r6i;
+            fLJ = 24.0*(enz_EPS_EE)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;  
+    
+            gr_enz[3*i] += fLJ*dx;
+            gr_enz[3*i+1] += fLJ*dy; 
+            gr_enz[3*i+2] += fLJ*dz;    
+	    }
+    }
+
+    // GRADIENT RIGHT wall repulsion
+    dy = r_enz[i*3+1] - 0.5*tb_L;
+    dsq = dy*dy;
+    if(dsq < enz_SSQ_RC) {
+        r2i = 1.0/dsq;
+        r6i = r2i*r2i*r2i;
+        r12i = r6i*r6i;
+        
+        fLJ = 24.0*(enz_EPS_EWALL)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;               
+        gr_enz[3*i+1] += fLJ*dy; 
+    }
+
+    // GRADIENT LEFT wall repuslion
+    dy = r_enz[i*3+1] + 0.5*tb_L;
+    dsq = dy*dy;
+    if(dsq < enz_SSQ_RC) {
+        r2i = 1.0/dsq;
+        r6i = r2i*r2i*r2i;
+        r12i = r6i*r6i;
+        
+        fLJ = 24.0*(enz_EPS_EWALL)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;               
+        gr_enz[3*i+1] += fLJ*dy; 
+    }
+    //__syncthreads();
+    
+}
 
