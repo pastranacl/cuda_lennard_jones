@@ -88,16 +88,7 @@ __global__ void grad(struct enzymes *enz,
                     struct tube *tb,
                     double *gr_enz);
 
-__global__ void grad_direct(double *r_enz,
-                           int N_enz,
-                           double enz_SSQ_RC,
-                           double enz_EPS_EE,
-                           double enz_EPS_EWALL,
-                           double enz_S6,
-                           double enz_S12, 
-                           double tb_L,
-                           double tb_wh,
-                           double *gr_enz);
+
 // Save
 void save_file(double **r_enz, int N_enz, int n_files);
 

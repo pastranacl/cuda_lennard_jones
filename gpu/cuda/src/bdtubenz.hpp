@@ -109,6 +109,17 @@ __global__ void grad_direct(double *r_enz,
                            double tb_wh,
                            double *gr_enz);
 
+__global__ void grad_direct_2d(double *r_enz,
+                                int N_enz,
+                                double enz_SSQ_RC,
+                                double enz_EPS_EE,
+                                double enz_EPS_EWALL,
+                                double enz_S6,
+                                double enz_S12, 
+                                double tb_L,
+                                double tb_wh,
+                                double *gr_enz);
+
 // Periodic bounday conditions
 __device__ inline double cupbc(double x, double w)
 {

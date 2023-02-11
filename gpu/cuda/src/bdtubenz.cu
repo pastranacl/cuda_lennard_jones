@@ -77,8 +77,15 @@ void tubenz_bdsim (struct enzymes *enz,
 
         cudaMemcpy(d_r_enz, h_r_enz, 3*enz->N_enz*sizeof(double), cudaMemcpyHostToDevice);
         //grad<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, d_enz, d_tb, d_gr_enz);
-        
+        /*
         grad_direct<<<NUM_BLOCKS, BLOCK_SIZE>>>(d_r_enz, enz->N_enz,  
+                                                enz->SSQ_RC, enz->EPS_EE, enz->EPS_EWALL, enz->S6, enz->S12, 
+                                                tb->L, tb->wh,
+                                                d_gr_enz);
+        */
+        dim3 dimBlock(32, 32);
+        dim3 dimGrid(1, 1);
+        grad_direct_2d<<<dimGrid, dimBlock>>>(d_r_enz, enz->N_enz,  
                                                 enz->SSQ_RC, enz->EPS_EE, enz->EPS_EWALL, enz->S6, enz->S12, 
                                                 tb->L, tb->wh,
                                                 d_gr_enz);
@@ -309,5 +316,99 @@ __global__ void grad_direct(double *r_enz,
     }
     //__syncthreads();
     
+}
+
+
+
+__global__ void grad_direct_2d(double *r_enz,
+                                int N_enz,
+                                double enz_SSQ_RC,
+                                double enz_EPS_EE,
+                                double enz_EPS_EWALL,
+                                double enz_S6,
+                                double enz_S12, 
+                                double tb_L,
+                                double tb_wh,
+                                double *gr_enz)
+{
+    
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (i >= N_enz || j >= N_enz || i==j) return;
+    printf("%d", j);
+    
+    
+    gr_enz[i*3+0] = 0; 
+    gr_enz[i*3+1] = 0; 
+    gr_enz[i*3+2] = 0; 
+    gr_enz[j*3+0] = 0; 
+    gr_enz[j*3+1] = 0; 
+    gr_enz[j*3+2] = 0; 
+
+    __syncthreads();
+    
+    double dx, dy, dz, dsq; 
+    double r2i, r6i, r12i;
+    double fLJ;
+
+    
+    
+    // GRADIENTS between enzymes
+   
+    double xej, yej, zej;
+    double xei, yei, zei;
+    xei = r_enz[i*3+0];
+    yei = r_enz[i*3+1];
+    zei = r_enz[i*3+2];
+    xej = r_enz[j*3+0];
+    yej = r_enz[j*3+1];
+    zej = r_enz[j*3+2];
+    
+    dx = cupbc(xei-xej, tb_wh);
+    dz = cupbc(zei-zej, tb_wh);
+    dy = yei-yej;
+    dsq = dx*dx + dy*dy + dz*dz;
+
+    if(dsq < enz_SSQ_RC) {
+        
+        r2i = 1.0/dsq;
+        r6i = r2i*r2i*r2i;
+        r12i = r6i*r6i;
+        fLJ = 24.0*(enz_EPS_EE)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;  
+        atomicAdd(&gr_enz[3*i], fLJ*dx);
+        atomicAdd(&gr_enz[3*i+1], fLJ*dy);
+        atomicAdd(&gr_enz[3*i+2], fLJ*dz);
+    }
+
+    __syncthreads();
+    /*
+    if(j==1) { // This is to avoid double calculation
+        // GRADIENT RIGHT wall repulsion
+        dy = r_enz[i*3+1] - 0.5*tb_L;
+        dsq = dy*dy;
+        if(dsq < enz_SSQ_RC) {
+            r2i = 1.0/dsq;
+            r6i = r2i*r2i*r2i;
+            r12i = r6i*r6i;
+            
+            fLJ = 24.0*(enz_EPS_EWALL)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;               
+            gr_enz[3*i+1] += fLJ*dy; 
+        }
+
+        // GRADIENT LEFT wall repuslion
+        dy = r_enz[i*3+1] + 0.5*tb_L;
+        dsq = dy*dy;
+        if(dsq < enz_SSQ_RC) {
+            r2i = 1.0/dsq;
+            r6i = r2i*r2i*r2i;
+            r12i = r6i*r6i;
+            
+            fLJ = 24.0*(enz_EPS_EWALL)*(enz_S6*r6i - 2.0*enz_S12*r12i)*r2i;               
+            gr_enz[3*i+1] += fLJ*dy; 
+        }
+    }
+    */
 }
 
